@@ -40,9 +40,15 @@ function signToken(user) {
 }
 
 // --- API Routes for Authentication ---
+
+// --- MODIFIED: Added detailed logging to the register route ---
 app.post('/api/auth/register', async (req, res) => {
+    // LOG 1: See exactly what the server receives
+    console.log('Received registration request for:', req.body);
+
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username & password required' });
+
     try {
         const hash = await bcrypt.hash(password, 10);
         const user = new User({ username, password_hash: hash });
@@ -51,11 +57,20 @@ app.post('/api/auth/register', async (req, res) => {
         res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
         res.json({ user: { id: user._id, username: user.username }, token });
     } catch (e) {
-        if (String(e).includes('E11000')) return res.status(409).json({ error: 'Username taken' });
-        console.error(e);
+        // LOG 2: See the FULL error from the database
+        console.error('Full registration error:', e); 
+        
+        if (String(e).includes('E11000')) {
+             return res.status(409).json({ error: 'Username taken' });
+        }
+        
+        // This line was redundant, the one above already logs the full error
+        // console.error(e); 
+        
         res.status(500).json({ error: 'Server error during registration' });
     }
 });
+
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username & password required' });
@@ -67,6 +82,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
     res.json({ user: { id: user._id, username: user.username }, token });
 });
+
 app.post('/api/auth/logout', (req, res) => {
     res.clearCookie('token');
     res.json({ ok: true });
@@ -75,7 +91,7 @@ app.post('/api/auth/logout', (req, res) => {
 // --- Static File Serving ---
 app.use(express.static('public'));
 
-// --- THIS IS THE CRITICAL BLOCK THAT WAS LIKELY DAMAGED/DELETED ---
+// --- HTTPS/HTTP Server Creation ---
 const PORT = process.env.PORT || 3000;
 let server;
 if (process.env.SSL_KEY && process.env.SSL_CERT && fs.existsSync(process.env.SSL_KEY) && fs.existsSync(process.env.SSL_CERT)) {
@@ -136,5 +152,5 @@ io.on('connection', (socket) => {
 
 // --- Start the Server ---
 server.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
